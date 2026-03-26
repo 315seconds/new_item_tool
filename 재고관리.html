@@ -1,0 +1,1043 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>재고 관리 — marketinu</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Noto+Sans+KR:wght@300;400;500;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --paper:      #F4EDD8;
+      --paper2:     #EDE4C8;
+      --paper3:     #E2D6B0;
+      --ink:        #1C1408;
+      --ink-mid:    #4A3820;
+      --ink-dim:    #7A6448;
+      --ink-muted:  #B09870;
+      --olive:      #3D4A28;
+      --olive-mid:  #566638;
+      --olive-lt:   rgba(61,74,40,0.10);
+      --rust:       #8C3A1A;
+      --rust-lt:    rgba(140,58,26,0.10);
+      --amber:      #B87018;
+      --border:     rgba(28,20,8,0.13);
+      --border-mid: rgba(28,20,8,0.26);
+      --font-serif: 'DM Serif Display', Georgia, serif;
+      --font-kr:    'Noto Sans KR', sans-serif;
+      --font-mono:  'Space Mono', monospace;
+      --r: 6px;
+    }
+    html, body { height: 100%; background: var(--paper); color: var(--ink); font-family: var(--font-kr); -webkit-font-smoothing: antialiased; }
+
+    /* ══ TOP NAV ══ */
+    .top-nav {
+      background: var(--olive); padding: 0 20px;
+      display: flex; align-items: stretch; gap: 0;
+      position: sticky; top: 0; z-index: 200;
+    }
+    .nav-brand { font-family: var(--font-serif); font-size: 16px; color: var(--paper); padding: 14px 20px 14px 0; border-right: 1px solid rgba(244,237,216,0.15); margin-right: 4px; white-space: nowrap; }
+    .nav-tab {
+      background: none; border: none; color: rgba(244,237,216,0.5);
+      font-family: var(--font-kr); font-size: 13px; font-weight: 500;
+      padding: 14px 16px; cursor: pointer; border-bottom: 3px solid transparent;
+      touch-action: manipulation; -webkit-tap-highlight-color: transparent;
+      transition: color 0.15s, border-color 0.15s; white-space: nowrap;
+    }
+    .nav-tab.active { color: var(--paper); border-bottom-color: var(--amber); }
+    .nav-right { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+    .conn-badge { font-family: var(--font-mono); font-size: 9px; color: rgba(244,237,216,0.4); display: flex; align-items: center; gap: 4px; }
+    .conn-dot { width: 5px; height: 5px; border-radius: 50%; background: rgba(244,237,216,0.3); transition: background 0.3s; }
+    .conn-dot.ok  { background: #5CC97A; }
+    .conn-dot.err { background: var(--rust); }
+
+    /* ══ PAGE ══ */
+    .page { display: none; min-height: calc(100vh - 48px); }
+    .page.active { display: block; }
+
+    /* ══ STATS STRIP ══ */
+    .stats-strip { background: var(--paper2); border-bottom: 1.5px solid var(--paper3); padding: 10px 20px; display: flex; gap: 20px; flex-wrap: wrap; align-items: center; }
+    .stat-chip { display: flex; align-items: baseline; gap: 5px; }
+    .stat-chip .n { font-family: var(--font-serif); font-size: 22px; color: var(--olive); line-height: 1; }
+    .stat-chip .l { font-family: var(--font-mono); font-size: 9px; color: var(--ink-muted); letter-spacing: 0.08em; }
+    .stat-div { width: 1px; height: 18px; background: var(--paper3); }
+
+    /* ══ FILTER BAR ══ */
+    .filter-bar { background: var(--paper2); border-bottom: 1px solid var(--border); padding: 10px 20px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+    .fi { background: white; border: 1.5px solid var(--border-mid); border-radius: var(--r); color: var(--ink); font-family: var(--font-kr); font-size: 13px; padding: 6px 10px; outline: none; height: 34px; cursor: pointer; transition: border-color 0.15s; }
+    .fi:focus { border-color: var(--olive); }
+    .fi-search { width: 160px; }
+    .fi-search::placeholder { color: var(--ink-muted); }
+    .fi-select { min-width: 90px; }
+    .fi-num { width: 80px; }
+    .filter-row { display: flex; align-items: center; gap: 6px; }
+    .filter-label { font-family: var(--font-mono); font-size: 9px; color: var(--ink-muted); letter-spacing: 0.1em; text-transform: uppercase; white-space: nowrap; }
+    .btn-sm { background: none; border: 1px solid var(--border-mid); border-radius: var(--r); color: var(--ink-dim); font-family: var(--font-kr); font-size: 12px; padding: 6px 12px; cursor: pointer; height: 34px; touch-action: manipulation; }
+    .view-toggle { display: flex; border: 1.5px solid var(--border-mid); border-radius: var(--r); overflow: hidden; margin-left: auto; }
+    .vbtn { background: white; border: none; padding: 6px 12px; font-size: 16px; cursor: pointer; height: 34px; touch-action: manipulation; transition: background 0.15s; }
+    .vbtn.active { background: var(--olive); }
+    .vbtn:not(:last-child) { border-right: 1.5px solid var(--border-mid); }
+    .result-bar { padding: 6px 20px; font-family: var(--font-mono); font-size: 10px; color: var(--ink-muted); background: var(--paper); border-bottom: 1px solid var(--border); }
+
+    /* ══ GRID ══ */
+    .grid-wrap { padding: 16px 20px; display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+    .grid-card { background: white; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; cursor: pointer; transition: transform 0.15s, box-shadow 0.15s; }
+    .grid-card:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(28,20,8,0.09); }
+    .grid-photo { width: 100%; aspect-ratio: 3/4; object-fit: cover; background: var(--paper2); display: block; }
+    .grid-nophoto { width: 100%; aspect-ratio: 3/4; background: var(--paper2); display: flex; align-items: center; justify-content: center; font-size: 28px; color: var(--ink-muted); }
+    .grid-info { padding: 7px 9px; border-top: 1px solid var(--border); }
+    .grid-brand { font-size: 12px; font-weight: 700; color: var(--olive); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .grid-meta { font-family: var(--font-mono); font-size: 10px; color: var(--ink-muted); margin-top: 2px; display: flex; justify-content: space-between; }
+    .grid-price { color: var(--amber); font-weight: 700; }
+    .status-badge { display: inline-block; font-family: var(--font-mono); font-size: 8px; padding: 1px 5px; border-radius: 3px; margin-top: 3px; }
+    .status-in_stock  { background: var(--olive-lt); color: var(--olive); }
+    .status-sold      { background: var(--rust-lt); color: var(--rust); }
+    .status-disposed  { background: rgba(28,20,8,0.07); color: var(--ink-muted); }
+
+    /* ══ TABLE ══ */
+    .table-wrap { padding: 16px 20px; overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 700px; }
+    thead th { background: var(--paper2); border-bottom: 2px solid var(--paper3); padding: 9px 12px; text-align: left; font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-dim); white-space: nowrap; cursor: pointer; user-select: none; }
+    thead th:hover { color: var(--olive); }
+    thead th.sorted { color: var(--olive); }
+    thead th.sorted::after { content: ' ↑'; }
+    thead th.sorted.desc::after { content: ' ↓'; }
+    tbody tr { border-bottom: 1px solid var(--border); cursor: pointer; transition: background 0.1s; }
+    tbody tr:hover { background: var(--olive-lt); }
+    tbody td { padding: 9px 12px; vertical-align: middle; }
+    .td-thumb img { width: 40px; height: 52px; object-fit: cover; border-radius: 4px; border: 1px solid var(--border); display: block; }
+    .td-thumb .np { width: 40px; height: 52px; background: var(--paper2); border-radius: 4px; border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; font-size: 16px; }
+    .td-brand { font-weight: 700; color: var(--olive); }
+    .td-sub { font-size: 10px; font-weight: 300; color: var(--ink-muted); margin-top: 1px; }
+    .td-price { font-family: var(--font-serif); font-size: 14px; color: var(--amber); white-space: nowrap; }
+    .td-mono { font-family: var(--font-mono); font-size: 11px; color: var(--ink-dim); }
+
+    /* ══ LIGHTBOX ══ */
+    .lightbox { position: fixed; inset: 0; z-index: 900; background: rgba(28,20,8,0.88); display: flex; align-items: center; justify-content: center; padding: 20px; opacity: 0; pointer-events: none; transition: opacity 0.2s; }
+    .lightbox.open { opacity: 1; pointer-events: all; }
+    .lb-inner { position: relative; max-width: 560px; width: 100%; display: flex; flex-direction: column; gap: 12px; align-items: center; max-height: 92vh; }
+    .lb-close { position: absolute; top: -10px; right: -10px; background: rgba(244,237,216,0.15); border: 1px solid rgba(244,237,216,0.25); border-radius: 50%; color: rgba(244,237,216,0.8); width: 34px; height: 34px; display: flex; align-items: center; justify-content: center; font-size: 16px; cursor: pointer; }
+    .lb-img { max-width: 100%; max-height: 55vh; object-fit: contain; border-radius: 8px; }
+    .lb-info { background: rgba(244,237,216,0.1); border: 1px solid rgba(244,237,216,0.18); border-radius: var(--r); padding: 12px 16px; width: 100%; display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+    .lb-field { display: flex; flex-direction: column; gap: 3px; }
+    .lb-lbl { font-family: var(--font-mono); font-size: 8px; color: rgba(244,237,216,0.38); letter-spacing: 0.15em; text-transform: uppercase; }
+    .lb-val { font-size: 13px; color: rgba(244,237,216,0.88); font-weight: 500; }
+    .lb-val.amber { font-family: var(--font-serif); font-size: 16px; color: #D4900A; }
+    .lb-actions { display: flex; gap: 8px; width: 100%; }
+    .lb-btn { flex: 1; border: 1px solid rgba(244,237,216,0.25); border-radius: var(--r); background: rgba(244,237,216,0.1); color: rgba(244,237,216,0.8); font-family: var(--font-kr); font-size: 13px; padding: 10px; cursor: pointer; text-align: center; touch-action: manipulation; transition: background 0.15s; }
+    .lb-btn:hover { background: rgba(244,237,216,0.2); }
+    .lb-btn.danger { border-color: rgba(140,58,26,0.5); color: #E07050; }
+    .lb-nav { display: flex; gap: 8px; align-items: center; }
+    .lb-nav-btn { background: rgba(244,237,216,0.12); border: 1px solid rgba(244,237,216,0.22); border-radius: var(--r); color: rgba(244,237,216,0.8); font-size: 20px; width: 42px; height: 42px; display: flex; align-items: center; justify-content: center; cursor: pointer; touch-action: manipulation; }
+    .lb-counter { font-family: var(--font-mono); font-size: 11px; color: rgba(244,237,216,0.4); min-width: 56px; text-align: center; }
+    .lb-history { width: 100%; background: rgba(244,237,216,0.07); border: 1px solid rgba(244,237,216,0.14); border-radius: var(--r); padding: 10px 14px; }
+    .lb-history-title { font-family: var(--font-mono); font-size: 9px; color: rgba(244,237,216,0.35); letter-spacing: 0.14em; text-transform: uppercase; margin-bottom: 8px; }
+    .lb-history-row { display: flex; justify-content: space-between; font-size: 12px; padding: 4px 0; border-bottom: 1px solid rgba(244,237,216,0.08); }
+    .lb-history-row:last-child { border-bottom: none; }
+    .lb-history-loc { color: rgba(244,237,216,0.7); }
+    .lb-history-date { font-family: var(--font-mono); font-size: 10px; color: rgba(244,237,216,0.35); }
+
+    /* ══ PAGE 2: BARCODE ══ */
+    .page-inner { max-width: 640px; margin: 0 auto; padding: 28px 20px; }
+    .section-title { font-family: var(--font-serif); font-size: 22px; color: var(--ink); margin-bottom: 6px; }
+    .section-sub { font-size: 13px; color: var(--ink-dim); font-weight: 300; line-height: 1.6; margin-bottom: 24px; }
+    .card { background: white; border: 1.5px solid var(--border); border-radius: 10px; padding: 20px; margin-bottom: 16px; }
+    .card-title { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--ink-muted); margin-bottom: 14px; }
+    .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }
+    .field-group { display: flex; flex-direction: column; gap: 5px; }
+    .field-label { font-family: var(--font-mono); font-size: 9px; color: var(--ink-muted); letter-spacing: 0.14em; text-transform: uppercase; }
+    .field-input { background: var(--paper2); border: 1.5px solid var(--border-mid); border-radius: var(--r); color: var(--ink); font-family: var(--font-mono); font-size: 15px; padding: 10px 12px; outline: none; width: 100%; transition: border-color 0.15s; }
+    .field-input:focus { border-color: var(--olive); }
+    .field-input::placeholder { color: var(--ink-muted); font-size: 12px; }
+    .pending-list { max-height: 320px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; margin-bottom: 14px; }
+    .pending-row { display: flex; align-items: center; gap: 10px; padding: 9px 12px; background: var(--paper2); border-radius: var(--r); font-size: 12px; }
+    .pending-row .pr-thumb { width: 36px; height: 46px; object-fit: cover; border-radius: 3px; border: 1px solid var(--border); flex-shrink: 0; }
+    .pending-row .pr-nophoto { width: 36px; height: 46px; background: var(--paper3); border-radius: 3px; border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; font-size: 14px; flex-shrink: 0; }
+    .pending-row .pr-info { flex: 1; min-width: 0; }
+    .pending-row .pr-brand { font-weight: 700; color: var(--olive); }
+    .pending-row .pr-meta { font-family: var(--font-mono); font-size: 10px; color: var(--ink-muted); }
+    .pending-row .pr-barcode { font-family: var(--font-mono); font-size: 11px; color: var(--amber); white-space: nowrap; }
+    .preview-box { background: var(--olive-lt); border: 1px solid rgba(61,74,40,0.22); border-radius: var(--r); padding: 12px 14px; margin-bottom: 14px; font-family: var(--font-mono); font-size: 12px; color: var(--olive-mid); line-height: 1.8; }
+    .btn-primary { background: var(--olive); color: var(--paper); border: none; border-radius: var(--r); font-family: var(--font-serif); font-size: 17px; padding: 14px 24px; cursor: pointer; touch-action: manipulation; transition: filter 0.15s; width: 100%; }
+    .btn-primary:hover { filter: brightness(1.1); }
+    .btn-primary:disabled { background: var(--paper3); color: var(--ink-muted); cursor: not-allowed; }
+
+    /* ══ PAGE 3: LOCATION ══ */
+    .loc-options { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+    .loc-btn { background: var(--paper2); border: 1.5px solid var(--border-mid); border-radius: 100px; color: var(--ink-dim); font-family: var(--font-kr); font-size: 13px; padding: 8px 18px; cursor: pointer; touch-action: manipulation; transition: background 0.15s, color 0.15s, border-color 0.15s; }
+    .loc-btn.active { background: var(--olive); color: var(--paper); border-color: var(--olive); }
+    .scan-area { display: flex; gap: 8px; margin-bottom: 10px; }
+    .scan-input { flex: 1; background: white; border: 1.5px solid var(--border-mid); border-radius: var(--r); color: var(--ink); font-family: var(--font-mono); font-size: 16px; padding: 12px 14px; outline: none; transition: border-color 0.15s; }
+    .scan-input:focus { border-color: var(--olive); }
+    .scan-input::placeholder { color: var(--ink-muted); font-size: 12px; font-family: var(--font-kr); }
+    .btn-scan-add { background: var(--olive); color: var(--paper); border: none; border-radius: var(--r); font-family: var(--font-kr); font-size: 14px; font-weight: 700; padding: 12px 18px; cursor: pointer; touch-action: manipulation; white-space: nowrap; }
+    .scanned-list { display: flex; flex-direction: column; gap: 5px; max-height: 280px; overflow-y: auto; margin-bottom: 14px; }
+    .scanned-item { display: flex; align-items: center; justify-content: space-between; padding: 10px 13px; background: var(--paper2); border-radius: var(--r); }
+    .scanned-item .si-left { display: flex; flex-direction: column; gap: 2px; }
+    .scanned-item .si-barcode { font-family: var(--font-mono); font-size: 13px; font-weight: 700; color: var(--olive); }
+    .scanned-item .si-brand { font-size: 11px; color: var(--ink-dim); }
+    .scanned-item .si-remove { background: none; border: none; color: var(--ink-muted); font-size: 16px; cursor: pointer; padding: 4px; touch-action: manipulation; }
+    .empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px 20px; gap: 10px; color: var(--ink-muted); font-size: 13px; text-align: center; }
+    .empty-state .ei { font-size: 36px; }
+
+    /* ══ SHEET (위치변경/판매/폐기 확인) ══ */
+    .sheet-overlay { position: fixed; inset: 0; z-index: 500; display: flex; align-items: flex-end; opacity: 0; pointer-events: none; transition: opacity 0.22s; }
+    .sheet-overlay.open { opacity: 1; pointer-events: all; }
+    .sheet-backdrop { position: absolute; inset: 0; background: rgba(28,20,8,0.55); }
+    .sheet-panel { position: relative; background: var(--paper); border-radius: 16px 16px 0 0; border-top: 2px solid var(--paper3); width: 100%; max-width: 480px; margin: 0 auto; padding: 20px 18px calc(20px + env(safe-area-inset-bottom)); transform: translateY(16px); transition: transform 0.26s cubic-bezier(.22,1,.36,1); }
+    .sheet-overlay.open .sheet-panel { transform: translateY(0); }
+    .sheet-handle { width: 36px; height: 4px; background: var(--paper3); border-radius: 2px; margin: 0 auto 16px; }
+    .sheet-title { font-family: var(--font-serif); font-size: 20px; margin-bottom: 8px; }
+    .sheet-msg { font-size: 13px; color: var(--ink-dim); font-weight: 300; line-height: 1.6; margin-bottom: 18px; white-space: pre-line; }
+    .sheet-actions { display: flex; gap: 8px; }
+    .btn-sheet-ok { flex: 1; background: var(--olive); color: var(--paper); border: none; border-radius: var(--r); font-family: var(--font-serif); font-size: 17px; padding: 14px; cursor: pointer; touch-action: manipulation; }
+    .btn-sheet-ok.danger { background: var(--rust); }
+    .btn-sheet-cancel { background: white; color: var(--ink-dim); border: 1.5px solid var(--border-mid); border-radius: var(--r); font-family: var(--font-kr); font-size: 13px; padding: 14px; cursor: pointer; touch-action: manipulation; }
+
+    /* ══ PROGRESS / TOAST ══ */
+    .progress-overlay { position: fixed; inset: 0; z-index: 800; display: flex; align-items: center; justify-content: center; background: rgba(28,20,8,0.65); opacity: 0; pointer-events: none; transition: opacity 0.2s; }
+    .progress-overlay.open { opacity: 1; pointer-events: all; }
+    .progress-box { background: var(--paper); border: 1.5px solid var(--border-mid); border-radius: 12px; padding: 26px 24px 22px; width: 260px; text-align: center; }
+    .progress-title { font-family: var(--font-serif); font-size: 18px; color: var(--ink); margin-bottom: 14px; }
+    .progress-bar-wrap { background: var(--paper3); border-radius: 100px; height: 8px; overflow: hidden; margin-bottom: 8px; }
+    .progress-bar-fill { height: 100%; background: var(--olive); border-radius: 100px; width: 0%; transition: width 0.2s; }
+    .progress-label { font-family: var(--font-mono); font-size: 11px; color: var(--ink-muted); }
+    .toast { position: fixed; top: 60px; left: 50%; transform: translateX(-50%) translateY(-8px); background: var(--ink); color: var(--paper); font-family: var(--font-kr); font-size: 13px; padding: 10px 20px; border-radius: 100px; z-index: 1000; opacity: 0; pointer-events: none; transition: opacity 0.2s, transform 0.2s; white-space: nowrap; max-width: calc(100vw - 32px); }
+    .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+    .toast.ok   { background: var(--olive); }
+    .toast.warn { background: var(--rust); }
+
+    @media (max-width: 600px) {
+      .grid-wrap { padding: 12px 14px; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); }
+      .table-wrap, .stats-strip, .filter-bar { padding-left: 14px; padding-right: 14px; }
+      .page-inner { padding: 20px 14px; }
+      .lb-info { grid-template-columns: 1fr 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav class="top-nav">
+  <div class="nav-brand">재고관리</div>
+  <button class="nav-tab active" data-page="inventory">📦 재고</button>
+  <button class="nav-tab" data-page="barcode">🏷 바코드</button>
+  <button class="nav-tab" data-page="location">📍 위치</button>
+  <div class="nav-right">
+    <div class="conn-badge"><div class="conn-dot" id="connDot"></div><span id="connLabel">확인중</span></div>
+  </div>
+</nav>
+
+<!-- ══ PAGE 1: INVENTORY ══ -->
+<div class="page active" id="page-inventory">
+  <div class="stats-strip">
+    <div class="stat-chip"><span class="n" id="stTotal">-</span><span class="l">전체재고</span></div>
+    <div class="stat-div"></div>
+    <div class="stat-chip"><span class="n" id="stPhoto">-</span><span class="l">사진있음</span></div>
+    <div class="stat-div"></div>
+    <div class="stat-chip"><span class="n" id="stNoBarcode">-</span><span class="l">바코드대기</span></div>
+    <div class="stat-div"></div>
+    <div class="stat-chip"><span class="n" id="stSold">-</span><span class="l">판매완료</span></div>
+  </div>
+  <div class="filter-bar">
+    <input type="text" class="fi fi-search" id="fSearch" placeholder="브랜드 · 카테고리 · 바코드">
+    <select class="fi fi-select" id="fStatus">
+      <option value="">전체상태</option>
+      <option value="in_stock">재고</option>
+      <option value="sold">판매</option>
+      <option value="disposed">폐기</option>
+    </select>
+    <select class="fi fi-select" id="fCat"><option value="">전체카테고리</option></select>
+    <select class="fi fi-select" id="fLoc"><option value="">전체위치</option></select>
+    <div class="filter-row">
+      <span class="filter-label">가격</span>
+      <input type="number" class="fi fi-num" id="fPriceMin" placeholder="최소">
+      <span style="font-size:11px;color:var(--ink-muted)">~</span>
+      <input type="number" class="fi fi-num" id="fPriceMax" placeholder="최대">
+      <span style="font-size:11px;color:var(--ink-muted)">천원</span>
+    </div>
+    <button class="btn-sm" id="btnReset">초기화</button>
+    <div class="view-toggle">
+      <button class="vbtn active" id="btnGrid">⊞</button>
+      <button class="vbtn" id="btnTable">☰</button>
+    </div>
+  </div>
+  <div class="result-bar" id="resultBar"></div>
+  <div id="gridView" class="grid-wrap"></div>
+  <div id="tableView" class="table-wrap" style="display:none">
+    <table>
+      <thead><tr>
+        <th></th>
+        <th data-sort="barcode">바코드</th>
+        <th data-sort="brand">브랜드</th>
+        <th data-sort="category">카테고리</th>
+        <th data-sort="price">가격</th>
+        <th data-sort="location">위치</th>
+        <th data-sort="status">상태</th>
+        <th data-sort="ingested_date">입고일</th>
+      </tr></thead>
+      <tbody id="tableBody"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ══ PAGE 2: BARCODE ══ -->
+<div class="page" id="page-barcode">
+  <div class="page-inner">
+    <div class="section-title">바코드 일괄 부여</div>
+    <div class="section-sub">오늘 입고된 물건 중 아직 바코드가 없는 항목에<br>순차적으로 바코드를 배정해요.</div>
+
+    <div class="card">
+      <div class="card-title">바코드 설정</div>
+      <div class="field-row">
+        <div class="field-group">
+          <span class="field-label">바코드 종류</span>
+          <select class="field-input" id="bcType">
+            <option value="C">C — 국내 일반</option>
+            <option value="SEL">SEL — 경매</option>
+            <option value="SB">SB — 경매(SB)</option>
+            <option value="H">H — 기타</option>
+          </select>
+        </div>
+        <div class="field-group">
+          <span class="field-label">시작 번호</span>
+          <input type="number" class="field-input" id="bcStart" placeholder="예: 20051">
+        </div>
+      </div>
+      <div id="bcPreview" class="preview-box" style="display:none"></div>
+      <div class="card-title" style="margin-top:4px">바코드 미부여 항목</div>
+      <div class="pending-list" id="pendingList">
+        <div class="empty-state"><div class="ei">✓</div><div>모든 항목에 바코드가 있어요</div></div>
+      </div>
+      <button class="btn-primary" id="btnAssignBarcode" disabled>바코드 일괄 부여</button>
+    </div>
+
+    <div class="card">
+      <div class="card-title">마지막 바코드 조회</div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <select class="field-input" id="bcTypeQuery" style="flex:1;min-width:120px">
+          <option value="C">C</option>
+          <option value="SEL">SEL</option>
+          <option value="SB">SB</option>
+          <option value="H">H</option>
+        </select>
+        <button class="btn-primary" id="btnQueryLast" style="width:auto;padding:10px 20px;font-size:14px">조회</button>
+      </div>
+      <div id="bcLastResult" style="margin-top:12px;font-family:var(--font-mono);font-size:13px;color:var(--olive-mid)"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ PAGE 3: LOCATION ══ -->
+<div class="page" id="page-location">
+  <div class="page-inner">
+    <div class="section-title">위치 일괄 변경</div>
+    <div class="section-sub">바코드를 입력하거나 스캔해서 목록을 만든 후<br>새 위치로 한 번에 변경해요.</div>
+
+    <div class="card">
+      <div class="card-title">새 위치 선택</div>
+      <div class="loc-options" id="locOptions">
+        <button class="loc-btn" data-val="입고대기">입고대기</button>
+        <button class="loc-btn" data-val="홍대점">홍대점</button>
+        <button class="loc-btn" data-val="성수점">성수점</button>
+        <button class="loc-btn" data-val="온라인">온라인</button>
+        <button class="loc-btn" data-val="폐기">폐기</button>
+      </div>
+      <div class="field-group" style="margin-bottom:12px">
+        <span class="field-label">직접 입력</span>
+        <input type="text" class="field-input" id="locCustom" placeholder="위치명 직접 입력">
+      </div>
+      <div class="field-group" style="margin-bottom:12px">
+        <span class="field-label">담당자</span>
+        <input type="text" class="field-input" id="locStaff" placeholder="이름">
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">바코드 스캔 / 입력</div>
+      <div class="scan-area">
+        <input type="text" class="scan-input" id="scanInput" placeholder="바코드 입력 후 Enter" autocomplete="off" autocorrect="off">
+        <button class="btn-scan-add" id="btnScanAdd">추가</button>
+      </div>
+      <div class="scanned-list" id="scannedList">
+        <div class="empty-state"><div class="ei">📷</div><div>바코드를 스캔하거나 입력해주세요</div></div>
+      </div>
+      <button class="btn-primary" id="btnApplyLocation" disabled>위치 변경 적용</button>
+    </div>
+  </div>
+</div>
+
+<!-- LIGHTBOX -->
+<div class="lightbox" id="lightbox">
+  <div class="lb-inner">
+    <div class="lb-close" id="lbClose">✕</div>
+    <img id="lbImg" class="lb-img" style="display:none" alt="">
+    <div class="lb-info">
+      <div class="lb-field"><span class="lb-lbl">브랜드</span><span class="lb-val" id="lbBrand"></span></div>
+      <div class="lb-field"><span class="lb-lbl">가격</span><span class="lb-val amber" id="lbPrice"></span></div>
+      <div class="lb-field"><span class="lb-lbl">카테고리</span><span class="lb-val" id="lbCat"></span></div>
+      <div class="lb-field"><span class="lb-lbl">바코드</span><span class="lb-val" id="lbBarcode"></span></div>
+      <div class="lb-field"><span class="lb-lbl">위치</span><span class="lb-val" id="lbLoc"></span></div>
+      <div class="lb-field"><span class="lb-lbl">입고일</span><span class="lb-val" id="lbDate"></span></div>
+    </div>
+    <div class="lb-history" id="lbHistory" style="display:none">
+      <div class="lb-history-title">위치 이동 이력</div>
+      <div id="lbHistoryRows"></div>
+    </div>
+    <div class="lb-actions">
+      <div class="lb-btn" id="lbSold">판매 처리</div>
+      <div class="lb-btn danger" id="lbDispose">폐기 처리</div>
+    </div>
+    <div class="lb-nav">
+      <button class="lb-nav-btn" id="lbPrev">‹</button>
+      <span class="lb-counter" id="lbCounter"></span>
+      <button class="lb-nav-btn" id="lbNext">›</button>
+    </div>
+  </div>
+</div>
+
+<!-- SHEET (상태변경 확인) -->
+<div class="sheet-overlay" id="actionSheet">
+  <div class="sheet-backdrop" id="actionBackdrop"></div>
+  <div class="sheet-panel">
+    <div class="sheet-handle"></div>
+    <div class="sheet-title" id="sheetTitle"></div>
+    <div class="sheet-msg" id="sheetMsg"></div>
+    <div class="sheet-actions">
+      <button class="btn-sheet-cancel" id="sheetCancel">취소</button>
+      <button class="btn-sheet-ok" id="sheetOk">확인</button>
+    </div>
+  </div>
+</div>
+
+<!-- PROGRESS -->
+<div class="progress-overlay" id="progressOverlay">
+  <div class="progress-box">
+    <div class="progress-title" id="progressTitle">처리 중</div>
+    <div class="progress-bar-wrap"><div class="progress-bar-fill" id="progressFill"></div></div>
+    <div class="progress-label" id="progressLabel"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ═══════════════════════════════════════════
+//  SUPABASE
+// ═══════════════════════════════════════════
+const SUPA_URL = 'https://tthbwmphmeliygszbrfa.supabase.co';
+const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR0aGJ3bXBobWVsaXlnc3picmZhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQzOTcxMDEsImV4cCI6MjA4OTk3MzEwMX0.Vq4eMFysCauqLL9t8l8FtnURfLVdOF2nBi2RQmiFFlk';
+const db = window.supabase.createClient(SUPA_URL, SUPA_KEY);
+
+async function checkConn() {
+  try {
+    const { error } = await db.from('items').select('id').limit(1);
+    if (error) throw error;
+    setConn(true);
+  } catch(e) { setConn(false); }
+}
+
+function setConn(ok) {
+  document.getElementById('connDot').className = 'conn-dot ' + (ok ? 'ok' : 'err');
+  document.getElementById('connLabel').textContent = ok ? 'DB 연결됨' : '연결 안됨';
+}
+
+const tick = () => new Promise(r => setTimeout(r, 0));
+
+// ═══════════════════════════════════════════
+//  NAV
+// ═══════════════════════════════════════════
+document.querySelectorAll('.nav-tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    tab.classList.add('active');
+    document.getElementById('page-' + tab.dataset.page).classList.add('active');
+    if (tab.dataset.page === 'barcode') loadPendingItems();
+  });
+});
+
+// ═══════════════════════════════════════════
+//  PAGE 1: INVENTORY
+// ═══════════════════════════════════════════
+let allItems = [], filteredItems = [];
+let currentView = 'grid', sortCol = null, sortDesc = false;
+let lbIndex = 0, lbTouchX = null;
+
+async function loadInventory() {
+  try {
+    const { data, error } = await db.from('items')
+      .select('*')
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    allItems = data || [];
+    rebuildFilters();
+    applyFilters();
+    updateStats();
+  } catch(e) {
+    console.error('loadInventory error:', e);
+    showToast('데이터 로드 실패: ' + (e.message || ''), 'warn');
+  }
+}
+
+function updateStats() {
+  const inStock  = allItems.filter(i => i.status === 'in_stock');
+  const sold     = allItems.filter(i => i.status === 'sold');
+  const withPhoto = allItems.filter(i => i.photo_url);
+  const noBarcode = inStock.filter(i => !i.barcode);
+  document.getElementById('stTotal').textContent    = inStock.length.toLocaleString();
+  document.getElementById('stPhoto').textContent    = withPhoto.length.toLocaleString();
+  document.getElementById('stNoBarcode').textContent = noBarcode.length.toLocaleString();
+  document.getElementById('stSold').textContent     = sold.length.toLocaleString();
+}
+
+function rebuildFilters() {
+  const cats = [...new Set(allItems.map(i => i.category).filter(Boolean))].sort();
+  const locs = [...new Set(allItems.map(i => i.location).filter(Boolean))].sort();
+  const fCat = document.getElementById('fCat');
+  const fLoc = document.getElementById('fLoc');
+  const curCat = fCat.value, curLoc = fLoc.value;
+  fCat.innerHTML = '<option value="">전체카테고리</option>' + cats.map(c => `<option value="${c}">${c}</option>`).join('');
+  fLoc.innerHTML = '<option value="">전체위치</option>' + locs.map(l => `<option value="${l}">${l}</option>`).join('');
+  fCat.value = curCat; fLoc.value = curLoc;
+}
+
+function applyFilters() {
+  const search   = document.getElementById('fSearch').value.trim().toLowerCase();
+  const status   = document.getElementById('fStatus').value;
+  const cat      = document.getElementById('fCat').value;
+  const loc      = document.getElementById('fLoc').value;
+  const priceMin = (parseFloat(document.getElementById('fPriceMin').value) || 0) * 1000;
+  const priceMax = (parseFloat(document.getElementById('fPriceMax').value) || 0) * 1000 || Infinity;
+
+  filteredItems = allItems.filter(it => {
+    if (search && !['brand','brand_raw','category','barcode','memo'].some(k => (it[k]||'').toLowerCase().includes(search))) return false;
+    if (status && it.status !== status) return false;
+    if (cat    && it.category !== cat)  return false;
+    if (loc    && it.location !== loc)  return false;
+    if (it.price < priceMin || it.price > priceMax) return false;
+    return true;
+  });
+
+  if (sortCol) {
+    filteredItems.sort((a, b) => {
+      let av = a[sortCol] ?? '', bv = b[sortCol] ?? '';
+      if (typeof av === 'string') av = av.toLowerCase();
+      if (typeof bv === 'string') bv = bv.toLowerCase();
+      return sortDesc ? (bv < av ? -1 : bv > av ? 1 : 0) : (av < bv ? -1 : av > bv ? 1 : 0);
+    });
+  }
+
+  document.getElementById('resultBar').textContent =
+    `${filteredItems.length.toLocaleString()}건 표시 (전체 ${allItems.length.toLocaleString()}건)`;
+
+  renderView();
+}
+
+['fSearch','fStatus','fCat','fLoc','fPriceMin','fPriceMax'].forEach(id => {
+  const el = document.getElementById(id);
+  el.addEventListener('input', applyFilters);
+  el.addEventListener('change', applyFilters);
+});
+
+document.getElementById('btnReset').addEventListener('click', () => {
+  ['fSearch','fPriceMin','fPriceMax'].forEach(id => document.getElementById(id).value = '');
+  ['fStatus','fCat','fLoc'].forEach(id => document.getElementById(id).value = '');
+  sortCol = null; sortDesc = false;
+  document.querySelectorAll('thead th').forEach(t => t.classList.remove('sorted','desc'));
+  applyFilters();
+});
+
+document.querySelectorAll('thead th[data-sort]').forEach(th => {
+  th.addEventListener('click', () => {
+    const key = th.dataset.sort;
+    if (sortCol === key) { sortDesc = !sortDesc; th.classList.toggle('desc', sortDesc); }
+    else {
+      document.querySelectorAll('thead th').forEach(t => t.classList.remove('sorted','desc'));
+      sortCol = key; sortDesc = false; th.classList.add('sorted');
+    }
+    applyFilters();
+  });
+});
+
+// view toggle
+document.getElementById('btnGrid').addEventListener('click', () => {
+  currentView = 'grid';
+  document.getElementById('gridView').style.display = 'grid';
+  document.getElementById('tableView').style.display = 'none';
+  document.getElementById('btnGrid').classList.add('active');
+  document.getElementById('btnTable').classList.remove('active');
+  renderView();
+});
+
+document.getElementById('btnTable').addEventListener('click', () => {
+  currentView = 'table';
+  document.getElementById('gridView').style.display = 'none';
+  document.getElementById('tableView').style.display = 'block';
+  document.getElementById('btnTable').classList.add('active');
+  document.getElementById('btnGrid').classList.remove('active');
+  renderView();
+});
+
+function renderView() {
+  if (currentView === 'grid') renderGrid();
+  else renderTable();
+}
+
+function statusBadge(s) {
+  const map = { in_stock: '재고', sold: '판매', disposed: '폐기' };
+  return `<span class="status-badge status-${s}">${map[s] || s}</span>`;
+}
+
+function renderGrid() {
+  const c = document.getElementById('gridView');
+  if (!filteredItems.length) {
+    c.innerHTML = '<div class="empty-state" style="grid-column:1/-1"><div class="ei">🔍</div><div>조건에 맞는 항목이 없어요</div></div>';
+    return;
+  }
+  const CHUNK = 150;
+  c.innerHTML = filteredItems.slice(0, CHUNK).map((it, i) => cardHTML(it, i)).join('');
+  c.onclick = e => { const card = e.target.closest('.grid-card'); if (card) openLightbox(parseInt(card.dataset.i)); };
+
+  if (filteredItems.length > CHUNK) {
+    let start = CHUNK;
+    function more() {
+      if (start >= filteredItems.length) return;
+      const end = Math.min(start + CHUNK, filteredItems.length);
+      const frag = document.createDocumentFragment();
+      for (let i = start; i < end; i++) {
+        const d = document.createElement('div');
+        d.innerHTML = cardHTML(filteredItems[i], i);
+        frag.appendChild(d.firstElementChild);
+      }
+      c.appendChild(frag); start = end;
+      requestAnimationFrame(more);
+    }
+    requestAnimationFrame(more);
+  }
+}
+
+function cardHTML(it, i) {
+  const photoEl = it.photo_url
+    ? `<img class="grid-photo" src="${it.photo_url}" loading="lazy" alt="${it.brand||''}">`
+    : `<div class="grid-nophoto">👕</div>`;
+  return `<div class="grid-card" data-i="${i}">
+    ${photoEl}
+    <div class="grid-info">
+      <div class="grid-brand">${it.brand || it.brand_raw || '—'}</div>
+      <div class="grid-meta"><span>${it.category || '—'}</span><span class="grid-price">${it.price ? (it.price/1000)+'K' : '—'}</span></div>
+      ${statusBadge(it.status)}
+    </div>
+  </div>`;
+}
+
+function renderTable() {
+  const tbody = document.getElementById('tableBody');
+  if (!filteredItems.length) {
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:60px;color:var(--ink-muted)">조건에 맞는 항목이 없어요</td></tr>';
+    return;
+  }
+  tbody.innerHTML = filteredItems.map((it, i) => {
+    const thumb = it.photo_url ? `<img src="${it.photo_url}" loading="lazy" alt="">` : `<div class="np">👕</div>`;
+    const date  = it.ingested_date ? it.ingested_date.slice(0,10) : '—';
+    return `<tr data-i="${i}">
+      <td class="td-thumb" style="width:52px">${thumb}</td>
+      <td class="td-mono">${it.barcode || '<span style="color:var(--ink-muted)">미부여</span>'}</td>
+      <td class="td-brand">${it.brand || it.brand_raw || '—'}<div class="td-sub">${it.brand_raw && it.brand_raw !== it.brand ? it.brand_raw : ''}</div></td>
+      <td class="td-mono">${it.category || '—'}</td>
+      <td class="td-price">${it.price ? (it.price/1000)+'K' : '—'}</td>
+      <td class="td-mono">${it.location || '—'}</td>
+      <td>${statusBadge(it.status)}</td>
+      <td class="td-mono">${date}</td>
+    </tr>`;
+  }).join('');
+  tbody.onclick = e => { const tr = e.target.closest('tr'); if (tr) openLightbox(parseInt(tr.dataset.i)); };
+}
+
+// ─── LIGHTBOX ───
+async function openLightbox(idx) {
+  lbIndex = idx;
+  await renderLightboxItem();
+  document.getElementById('lightbox').classList.add('open');
+}
+
+async function renderLightboxItem() {
+  const it = filteredItems[lbIndex];
+  if (!it) return;
+  const img = document.getElementById('lbImg');
+  if (it.photo_url) { img.src = it.photo_url; img.style.display = 'block'; }
+  else img.style.display = 'none';
+
+  document.getElementById('lbBrand').textContent   = it.brand || it.brand_raw || '—';
+  document.getElementById('lbPrice').textContent   = it.price ? (it.price/1000).toLocaleString()+'K원' : '—';
+  document.getElementById('lbCat').textContent     = it.category || '—';
+  document.getElementById('lbBarcode').textContent = it.barcode || '미부여';
+  document.getElementById('lbLoc').textContent     = it.location || '—';
+  document.getElementById('lbDate').textContent    = it.ingested_date?.slice(0,10) || '—';
+  document.getElementById('lbCounter').textContent = `${lbIndex+1} / ${filteredItems.length}`;
+
+  // 위치 이력 로드
+  try {
+    const { data } = await db.from('location_history')
+      .select('location, changed_at, changed_by')
+      .eq('item_id', it.id)
+      .order('changed_at', { ascending: false })
+      .limit(5);
+    const histEl = document.getElementById('lbHistory');
+    const rows   = document.getElementById('lbHistoryRows');
+    if (data && data.length) {
+      histEl.style.display = 'block';
+      rows.innerHTML = data.map(h => {
+        const date = h.changed_at ? new Date(h.changed_at).toLocaleDateString('ko-KR', { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' }) : '';
+        return `<div class="lb-history-row"><span class="lb-history-loc">${h.location}${h.changed_by ? ` · ${h.changed_by}` : ''}</span><span class="lb-history-date">${date}</span></div>`;
+      }).join('');
+    } else { histEl.style.display = 'none'; }
+  } catch(e) { document.getElementById('lbHistory').style.display = 'none'; }
+}
+
+document.getElementById('lbClose').addEventListener('click', () => document.getElementById('lightbox').classList.remove('open'));
+document.getElementById('lightbox').addEventListener('click', e => { if (e.target === e.currentTarget) e.currentTarget.classList.remove('open'); });
+document.getElementById('lbPrev').addEventListener('click', () => { if (lbIndex > 0) { lbIndex--; renderLightboxItem(); } });
+document.getElementById('lbNext').addEventListener('click', () => { if (lbIndex < filteredItems.length-1) { lbIndex++; renderLightboxItem(); } });
+document.addEventListener('keydown', e => {
+  if (!document.getElementById('lightbox').classList.contains('open')) return;
+  if (e.key === 'ArrowLeft' && lbIndex > 0) { lbIndex--; renderLightboxItem(); }
+  if (e.key === 'ArrowRight' && lbIndex < filteredItems.length-1) { lbIndex++; renderLightboxItem(); }
+  if (e.key === 'Escape') document.getElementById('lightbox').classList.remove('open');
+});
+document.getElementById('lightbox').addEventListener('touchstart', e => { lbTouchX = e.touches[0].clientX; }, { passive:true });
+document.getElementById('lightbox').addEventListener('touchend', e => {
+  if (lbTouchX === null) return;
+  const dx = e.changedTouches[0].clientX - lbTouchX;
+  if (Math.abs(dx) > 50) {
+    if (dx < 0 && lbIndex < filteredItems.length-1) { lbIndex++; renderLightboxItem(); }
+    if (dx > 0 && lbIndex > 0) { lbIndex--; renderLightboxItem(); }
+  }
+  lbTouchX = null;
+}, { passive:true });
+
+// ─── 판매 / 폐기 ───
+let sheetCallback = null;
+function openSheet({ title, msg, okText, danger, onOk }) {
+  document.getElementById('sheetTitle').textContent = title;
+  document.getElementById('sheetMsg').textContent   = msg;
+  document.getElementById('sheetOk').textContent    = okText;
+  document.getElementById('sheetOk').className = 'btn-sheet-ok' + (danger ? ' danger' : '');
+  sheetCallback = onOk;
+  document.getElementById('actionSheet').classList.add('open');
+}
+document.getElementById('sheetOk').addEventListener('click', () => {
+  document.getElementById('actionSheet').classList.remove('open');
+  if (sheetCallback) { sheetCallback(); sheetCallback = null; }
+});
+document.getElementById('sheetCancel').addEventListener('click', () => { document.getElementById('actionSheet').classList.remove('open'); sheetCallback = null; });
+document.getElementById('actionBackdrop').addEventListener('click', () => { document.getElementById('actionSheet').classList.remove('open'); sheetCallback = null; });
+
+document.getElementById('lbSold').addEventListener('click', () => {
+  const it = filteredItems[lbIndex];
+  if (!it) return;
+  openSheet({
+    title: '판매 처리',
+    msg: `${it.brand || it.brand_raw || '?'} (${it.price ? (it.price/1000)+'K' : '?'}원)\n이 항목을 판매 완료로 처리할까요?`,
+    okText: '판매 처리',
+    onOk: async () => {
+      try {
+        await db.from('items').update({ status: 'sold' }).eq('id', it.id);
+        it.status = 'sold';
+        renderLightboxItem();
+        renderView(); updateStats();
+        showToast('판매 처리 완료', 'ok');
+      } catch(e) { showToast('처리 실패: ' + e.message, 'warn'); }
+    }
+  });
+});
+
+document.getElementById('lbDispose').addEventListener('click', () => {
+  const it = filteredItems[lbIndex];
+  if (!it) return;
+  openSheet({
+    title: '폐기 처리',
+    msg: `${it.brand || it.brand_raw || '?'}\n이 항목을 폐기로 처리하고 위치를 "폐기"로 변경할까요?`,
+    okText: '폐기 처리',
+    danger: true,
+    onOk: async () => {
+      try {
+        await db.from('items').update({ status: 'disposed', location: '폐기' }).eq('id', it.id);
+        await db.from('location_history').insert({ item_id: it.id, location: '폐기' });
+        it.status = 'disposed'; it.location = '폐기';
+        renderLightboxItem();
+        renderView(); updateStats();
+        showToast('폐기 처리 완료', 'ok');
+      } catch(e) { showToast('처리 실패: ' + e.message, 'warn'); }
+    }
+  });
+});
+
+// ═══════════════════════════════════════════
+//  PAGE 2: BARCODE
+// ═══════════════════════════════════════════
+let pendingItems = [];
+
+async function loadPendingItems() {
+  try {
+    const { data, error } = await db.from('items')
+      .select('id, brand, brand_raw, category, price, photo_url, ingested_date')
+      .is('barcode', null)
+      .eq('status', 'in_stock')
+      .order('created_at', { ascending: true });
+    if (error) throw error;
+    pendingItems = data || [];
+    renderPendingList();
+    updateBcPreview();
+  } catch(e) { showToast('로드 실패: ' + e.message, 'warn'); }
+}
+
+function renderPendingList() {
+  const list = document.getElementById('pendingList');
+  const btn  = document.getElementById('btnAssignBarcode');
+  if (!pendingItems.length) {
+    list.innerHTML = '<div class="empty-state"><div class="ei">✓</div><div>모든 항목에 바코드가 있어요</div></div>';
+    btn.disabled = true;
+    return;
+  }
+  btn.disabled = false;
+  const preview = buildBarcodePreview();
+  list.innerHTML = pendingItems.map((it, i) => {
+    const bc = preview[i] || '';
+    const thumb = it.photo_url
+      ? `<img class="pr-thumb" src="${it.photo_url}" alt="">`
+      : `<div class="pr-nophoto">👕</div>`;
+    return `<div class="pending-row">
+      ${thumb}
+      <div class="pr-info">
+        <div class="pr-brand">${it.brand || it.brand_raw || '—'}</div>
+        <div class="pr-meta">${it.category || '—'} · ${it.price ? (it.price/1000)+'K' : '—'} · ${it.ingested_date?.slice(0,10)||'—'}</div>
+      </div>
+      <div class="pr-barcode">${bc}</div>
+    </div>`;
+  }).join('');
+}
+
+function buildBarcodePreview() {
+  const type  = document.getElementById('bcType').value;
+  const start = parseInt(document.getElementById('bcStart').value) || 0;
+  if (!start) return [];
+  return pendingItems.map((_, i) => `${type}${start + i}`);
+}
+
+function updateBcPreview() {
+  const type  = document.getElementById('bcType').value;
+  const start = parseInt(document.getElementById('bcStart').value) || 0;
+  const prev  = document.getElementById('bcPreview');
+  if (!start || !pendingItems.length) { prev.style.display = 'none'; renderPendingList(); return; }
+  const end = start + pendingItems.length - 1;
+  prev.style.display = 'block';
+  prev.textContent = `${type}${start} → ${type}${end} (총 ${pendingItems.length}개)`;
+  renderPendingList();
+}
+
+['bcType','bcStart'].forEach(id => document.getElementById(id).addEventListener('input', updateBcPreview));
+
+// 마지막 바코드 조회
+document.getElementById('btnQueryLast').addEventListener('click', async () => {
+  const type = document.getElementById('bcTypeQuery').value;
+  const res  = document.getElementById('bcLastResult');
+  res.textContent = '조회 중...';
+  try {
+    const { data, error } = await db.from('items')
+      .select('barcode')
+      .like('barcode', `${type}%`)
+      .order('barcode', { ascending: false })
+      .limit(1);
+    if (error) throw error;
+    if (data && data.length) {
+      const last = data[0].barcode;
+      const num  = parseInt(last.replace(type, '')) || 0;
+      res.textContent = `마지막: ${last}  →  다음: ${type}${num + 1}`;
+      // 자동으로 시작번호 세팅
+      document.getElementById('bcType').value  = type;
+      document.getElementById('bcStart').value = num + 1;
+      updateBcPreview();
+    } else { res.textContent = `${type} 바코드 없음 — ${type}1 부터 시작 가능`; }
+  } catch(e) { res.textContent = '조회 실패: ' + e.message; }
+});
+
+// 바코드 일괄 부여
+document.getElementById('btnAssignBarcode').addEventListener('click', () => {
+  const type  = document.getElementById('bcType').value;
+  const start = parseInt(document.getElementById('bcStart').value) || 0;
+  if (!start) { showToast('시작 번호를 입력해주세요', 'warn'); return; }
+  openSheet({
+    title: '바코드 일괄 부여',
+    msg: `${type}${start} ~ ${type}${start + pendingItems.length - 1}\n총 ${pendingItems.length}개 항목에 바코드를 부여할까요?\n\n부여 후 되돌리기 어려우니 시작 번호를 한 번 더 확인해주세요.`,
+    okText: '부여 시작',
+    onOk: () => doAssignBarcode(type, start),
+  });
+});
+
+async function doAssignBarcode(type, start) {
+  showProgress(true, '바코드 부여 중...', 0);
+  let done = 0;
+  try {
+    for (const item of pendingItems) {
+      const bc = `${type}${start + done}`;
+      const { error } = await db.from('items').update({ barcode: bc, barcode_type: type }).eq('id', item.id);
+      if (error) throw error;
+      done++;
+      showProgress(true, `${done} / ${pendingItems.length}`, Math.round(done / pendingItems.length * 100));
+      await tick();
+    }
+    showProgress(false);
+    showToast(`${done}개 바코드 부여 완료`, 'ok');
+    await loadInventory();
+    await loadPendingItems();
+  } catch(e) {
+    showProgress(false);
+    showToast('부여 실패: ' + e.message, 'warn');
+  }
+}
+
+// ═══════════════════════════════════════════
+//  PAGE 3: LOCATION
+// ═══════════════════════════════════════════
+let scannedBarcodes = []; // [{barcode, itemId, brand}]
+let selectedLocation = '';
+
+document.querySelectorAll('.loc-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    selectedLocation = btn.dataset.val;
+    document.querySelectorAll('.loc-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('locCustom').value = '';
+  });
+});
+
+document.getElementById('locCustom').addEventListener('input', e => {
+  selectedLocation = e.target.value.trim();
+  document.querySelectorAll('.loc-btn').forEach(b => b.classList.remove('active'));
+});
+
+// 스캔 입력
+const scanInput = document.getElementById('scanInput');
+scanInput.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); addBarcode(); } });
+document.getElementById('btnScanAdd').addEventListener('click', addBarcode);
+
+async function addBarcode() {
+  const val = scanInput.value.trim().toUpperCase();
+  if (!val) return;
+  if (scannedBarcodes.find(s => s.barcode === val)) {
+    showToast('이미 추가된 바코드예요', 'warn');
+    scanInput.value = '';
+    return;
+  }
+  // DB에서 바코드 조회
+  try {
+    const { data, error } = await db.from('items')
+      .select('id, brand, brand_raw, location, status')
+      .eq('barcode', val)
+      .single();
+    if (error || !data) {
+      scannedBarcodes.push({ barcode: val, itemId: null, brand: '(조회 안됨)' });
+    } else {
+      scannedBarcodes.push({ barcode: val, itemId: data.id, brand: data.brand || data.brand_raw || '—', currentLoc: data.location });
+    }
+  } catch(e) {
+    scannedBarcodes.push({ barcode: val, itemId: null, brand: '(오류)' });
+  }
+  scanInput.value = '';
+  renderScannedList();
+  scanInput.focus();
+}
+
+function renderScannedList() {
+  const list = document.getElementById('scannedList');
+  const btn  = document.getElementById('btnApplyLocation');
+  if (!scannedBarcodes.length) {
+    list.innerHTML = '<div class="empty-state"><div class="ei">📷</div><div>바코드를 스캔하거나 입력해주세요</div></div>';
+    btn.disabled = true;
+    return;
+  }
+  btn.disabled = false;
+  list.innerHTML = scannedBarcodes.map((s, i) => `
+    <div class="scanned-item">
+      <div class="si-left">
+        <div class="si-barcode">${s.barcode}</div>
+        <div class="si-brand">${s.brand}${s.currentLoc ? ` · 현재: ${s.currentLoc}` : ''}</div>
+      </div>
+      <button class="si-remove" data-i="${i}">✕</button>
+    </div>`).join('');
+  list.querySelectorAll('.si-remove').forEach(btn => {
+    btn.addEventListener('click', () => {
+      scannedBarcodes.splice(parseInt(btn.dataset.i), 1);
+      renderScannedList();
+    });
+  });
+}
+
+document.getElementById('btnApplyLocation').addEventListener('click', () => {
+  const loc = selectedLocation || document.getElementById('locCustom').value.trim();
+  if (!loc) { showToast('위치를 선택하거나 입력해주세요', 'warn'); return; }
+  const valid = scannedBarcodes.filter(s => s.itemId);
+  if (!valid.length) { showToast('조회된 항목이 없어요', 'warn'); return; }
+  openSheet({
+    title: '위치 일괄 변경',
+    msg: `총 ${valid.length}개 항목의 위치를\n"${loc}"으로 변경할까요?`,
+    okText: '변경',
+    onOk: () => doApplyLocation(loc, valid),
+  });
+});
+
+async function doApplyLocation(loc, items) {
+  const staff = document.getElementById('locStaff').value.trim();
+  showProgress(true, '위치 변경 중...', 0);
+  let done = 0;
+  try {
+    for (const s of items) {
+      await db.from('items').update({ location: loc }).eq('id', s.itemId);
+      await db.from('location_history').insert({ item_id: s.itemId, location: loc, changed_by: staff || null });
+      done++;
+      showProgress(true, `${done} / ${items.length}`, Math.round(done / items.length * 100));
+      await tick();
+    }
+    showProgress(false);
+    showToast(`${done}개 항목 위치 변경 완료`, 'ok');
+    scannedBarcodes = [];
+    renderScannedList();
+    await loadInventory();
+  } catch(e) {
+    showProgress(false);
+    showToast('변경 실패: ' + e.message, 'warn');
+  }
+}
+
+// ═══════════════════════════════════════════
+//  PROGRESS / TOAST
+// ═══════════════════════════════════════════
+function showProgress(visible, label = '', pct = 0) {
+  document.getElementById('progressOverlay').classList.toggle('open', visible);
+  if (visible) {
+    document.getElementById('progressFill').style.width = pct + '%';
+    document.getElementById('progressLabel').textContent = label;
+  }
+}
+
+let toastTimer;
+function showToast(msg, type = '') {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.className = 'toast' + (type ? ` ${type}` : '');
+  clearTimeout(toastTimer);
+  requestAnimationFrame(() => {
+    t.classList.add('show');
+    toastTimer = setTimeout(() => t.classList.remove('show'), 2800);
+  });
+}
+
+// ═══════════════════════════════════════════
+//  INIT
+// ═══════════════════════════════════════════
+checkConn();
+loadInventory();
+</script>
+</body>
+</html>
